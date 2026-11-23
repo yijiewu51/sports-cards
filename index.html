@@ -418,9 +418,15 @@ async function saveSupabaseConfig() {
   db = window.supabase.createClient(url, key);
 
   // Test connection
-  const { error } = await db.from('cards').select('id', { count: 'exact', head: true });
-  if (error) {
-    alert('连接失败: ' + error.message + '\n\n请确认已运行 SQL 创建 cards 表');
+  try {
+    const { data, error } = await db.from('cards').select('id').limit(1);
+    if (error) {
+      alert('连接失败:\n' + error.message + '\n\n错误码: ' + (error.code || 'N/A') + '\n提示: ' + (error.hint || 'N/A') + '\n\n如果用的是 sb_publishable_ 开头的 key，请点 Supabase API Keys 页面的 "View legacy API keys"，用 anon 那个 eyJ... 开头的 key');
+      db = null;
+      return;
+    }
+  } catch(e) {
+    alert('网络连接失败:\n' + e.message + '\n\n请检查 Project URL 是否正确');
     db = null;
     return;
   }
