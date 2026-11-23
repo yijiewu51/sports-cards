@@ -167,9 +167,9 @@ tr.row-sold .rc-yes, tr.row-sold .sign-yes, tr.row-sold .mat-yes { color: #ccc; 
       <select id="f_buyer"><option value="香香">香香</option><option value="小桃子">小桃子</option><option value="">未分配</option></select>
     </div>
     <div class="form-row"><label>来源</label>
-      <select id="f_source"><option value="卡淘">卡淘</option><option value="eBay">eBay</option><option value="卡展">卡展</option></select>
+      <select id="f_source" onchange="updateCostLabel()"><option value="卡淘">卡淘</option><option value="eBay">eBay</option><option value="卡展">卡展</option></select>
     </div>
-    <div class="form-row"><label>成本 (CNY)</label><input id="f_cost" type="number" step="0.01" placeholder="0"></div>
+    <div class="form-row"><label id="f_cost_label">成本 (CNY \u00A5)</label><input id="f_cost" type="number" step="0.01" placeholder="0"></div>
     <div class="form-row"><label>状态</label>
       <select id="f_status"><option value="持有">持有</option><option value="在英国">在英国</option><option value="带回英国">带回英国</option></select>
     </div>
@@ -439,7 +439,12 @@ function copySQL() {
 }
 
 // ==================== ADD CARD MODAL ====================
-function showAddModal() { document.getElementById('addModal').style.display = 'flex'; }
+function updateCostLabel() {
+  const src = document.getElementById('f_source').value;
+  const isGbp = src === 'eBay' || src === '卡展';
+  document.getElementById('f_cost_label').textContent = isGbp ? '成本 (GBP \u00A3)' : '成本 (CNY \u00A5)';
+}
+function showAddModal() { updateCostLabel(); document.getElementById('addModal').style.display = 'flex'; }
 function closeAddModal() { document.getElementById('addModal').style.display = 'none'; }
 
 function nextId(prefix) {
@@ -466,7 +471,7 @@ async function submitNewCard() {
     number: document.getElementById('f_number').value.trim(),
     buyer: document.getElementById('f_buyer').value,
     source: source,
-    cost_cny: parseFloat(document.getElementById('f_cost').value) || 0,
+    cost_cny: (parseFloat(document.getElementById('f_cost').value) || 0) * (source === 'eBay' || source === '卡展' ? 9 : 1),
     sold_price: null,
     status: document.getElementById('f_status').value,
     note: document.getElementById('f_note').value.trim(),
@@ -539,7 +544,7 @@ const columns = [
   {key:'number', label:'编号'},
   {key:'buyer', label:'购买人'},
   {key:'source', label:'来源'},
-  {key:'cost_cny', label:'成本 \u00A5', editable: true},
+  {key:'cost_cny', label:'成本', editable: true},
   {key:'breakeven', label:'回本价'},
   {key:'sold_price', label:'成交价', editable: true},
   {key:'profit', label:'利润 \u00A5'},
@@ -569,24 +574,36 @@ function renderHead() {
   document.getElementById('tableHead').appendChild(tr);
 }
 
+function isGBP(card, field) {
+  return field === 'cost_cny' && (card.source === 'eBay' || card.source === '卡展');
+}
+
+function fmtCost(card, field, value) {
+  if (value == null) return '-';
+  if (isGBP(card, field)) return '\u00A3' + (value / 9).toFixed(2);
+  return '\u00A5' + Number(value).toFixed(2);
+}
+
 function makeEditableCell(card, field, value) {
   const td = document.createElement('td');
   td.className = 'editable-cell';
-  td.textContent = value != null ? fmtMoney(value) : '-';
+  const gbp = isGBP(card, field);
+  td.textContent = value != null ? (field === 'cost_cny' ? fmtCost(card, field, value) : fmtMoney(value)) : '-';
   td.ondblclick = function() {
     if (td.querySelector('input')) return;
     const input = document.createElement('input');
     input.type = 'number';
     input.step = '0.01';
-    input.value = value != null ? value : '';
-    input.placeholder = '输入金额';
+    input.value = value != null ? (gbp ? (value / 9).toFixed(2) : value) : '';
+    input.placeholder = gbp ? '输入英镑' : '输入金额';
     td.textContent = '';
     td.appendChild(input);
     input.focus();
     input.select();
     const commit = () => {
       const raw = input.value.trim();
-      const newVal = raw === '' ? null : parseFloat(raw);
+      let newVal = raw === '' ? null : parseFloat(raw);
+      if (newVal != null && gbp) newVal = newVal * 9;
       updateCard(card.id, { [field]: newVal });
     };
     input.onblur = commit;
