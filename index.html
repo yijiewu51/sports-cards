@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>球星卡库存总览 - 香香 × 小桃子</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f0f2f5; color: #333; }
+.header { background: linear-gradient(135deg, #1a1a2e, #16213e); color: #fff; padding: 24px 32px; }
+.header h1 { font-size: 24px; font-weight: 600; }
+.header p { color: #94a3b8; margin-top: 4px; font-size: 14px; }
+
+.stats-row { display: flex; gap: 16px; padding: 20px 32px; flex-wrap: wrap; }
+.stat-card { background: #fff; border-radius: 12px; padding: 18px 22px; flex: 1; min-width: 160px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+.stat-card .label { font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: .5px; }
+.stat-card .value { font-size: 26px; font-weight: 700; margin-top: 4px; }
+.stat-card .sub { font-size: 12px; color: #999; margin-top: 2px; }
+.profit-pos { color: #16a34a; }
+.profit-neg { color: #dc2626; }
+
+.controls { padding: 12px 32px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.controls select, .controls input[type="text"] { padding: 8px 14px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; background: #fff; outline: none; }
+.controls select:focus, .controls input[type="text"]:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,.15); }
+.controls input[type="text"] { width: 220px; }
+.tab-bar { display: flex; gap: 0; padding: 0 32px; }
+.tab { padding: 10px 24px; cursor: pointer; font-size: 14px; font-weight: 500; border-bottom: 2px solid transparent; color: #666; transition: all .2s; }
+.tab:hover { color: #333; }
+.tab.active { color: #3b82f6; border-bottom-color: #3b82f6; }
+
+.table-wrap { padding: 0 32px 32px; overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,.08); font-size: 13px; }
+thead { background: #f8fafc; }
+th { padding: 12px 14px; text-align: left; font-weight: 600; color: #555; white-space: nowrap; border-bottom: 2px solid #e5e7eb; cursor: pointer; user-select: none; }
+th:hover { background: #f1f5f9; }
+th .sort-arrow { margin-left: 4px; font-size: 10px; color: #aaa; }
+th.sorted-asc .sort-arrow::after { content: ' \u25B2'; color: #3b82f6; }
+th.sorted-desc .sort-arrow::after { content: ' \u25BC'; color: #3b82f6; }
+td { padding: 10px 14px; border-bottom: 1px solid #f1f3f5; white-space: nowrap; }
+tr:hover td { background: #f8fafc; }
+tr.row-sold td { background: #f9fafb; color: #aaa; }
+tr.row-sold:hover td { background: #f3f4f6; color: #aaa; }
+tr.row-sold .badge { opacity: .5; }
+tr.row-sold .rc-yes, tr.row-sold .sign-yes, tr.row-sold .mat-yes { color: #ccc; }
+.sold-divider td { background: #e5e7eb; padding: 6px 14px; font-size: 12px; font-weight: 600; color: #888; letter-spacing: .5px; }
+
+.badge { padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+.badge-holding { background: #dbeafe; color: #1d4ed8; }
+.badge-sold { background: #dcfce7; color: #15803d; }
+.badge-uk { background: #fef3c7; color: #b45309; }
+.badge-xx { background: #ede9fe; color: #7c3aed; }
+.badge-xtz { background: #fce7f3; color: #be185d; }
+.badge-katao { background: #e0f2fe; color: #0369a1; }
+.badge-ebay { background: #fef9c3; color: #a16207; }
+.badge-kazhan { background: #f3e8ff; color: #7e22ce; }
+.rc-yes { color: #16a34a; font-weight: 700; }
+.sign-yes { color: #d97706; font-weight: 700; }
+.mat-yes { color: #7c3aed; font-weight: 700; }
+.profit-cell-pos { color: #16a34a; font-weight: 600; }
+.profit-cell-neg { color: #dc2626; font-weight: 600; }
+.empty-state { text-align: center; padding: 60px 20px; color: #999; }
+.footer { text-align: center; padding: 20px; color: #aaa; font-size: 12px; }
+
+.editable-cell { position: relative; cursor: text; min-width: 70px; }
+.editable-cell:hover { background: #eef2ff !important; }
+.editable-cell input {
+  width: 80px; padding: 2px 6px; border: 1px solid #3b82f6; border-radius: 4px;
+  font-size: 13px; outline: none; background: #fff;
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>球星卡库存总览</h1>
+  <p>香香 x 小桃子 | GBP->CNY 汇率: 9</p>
+</div>
+
+<div class="stats-row" id="statsRow"></div>
+
+<div class="tab-bar">
+  <div class="tab active" data-tab="all" onclick="switchTab('all')">全部</div>
+  <div class="tab" data-tab="katao" onclick="switchTab('katao')">卡淘购入</div>
+  <div class="tab" data-tab="ebay" onclick="switchTab('ebay')">eBay购入</div>
+</div>
+
+<div class="controls">
+  <input type="text" id="searchInput" placeholder="搜索球员、系列、编号..." oninput="renderTable()">
+  <select id="filterBuyer" onchange="renderTable()">
+    <option value="">全部购买人</option>
+    <option value="香香">香香</option>
+    <option value="小桃子">小桃子</option>
+  </select>
+  <select id="filterStatus" onchange="renderTable()">
+    <option value="">全部状态</option>
+    <option value="持有">持有</option>
+    <option value="已售出">已售出</option>
+    <option value="在英国">在英国</option>
+    <option value="带回英国">带回英国</option>
+  </select>
+  <select id="filterRC" onchange="renderTable()">
+    <option value="">RC/签名/物料</option>
+    <option value="rc">RC 新秀</option>
+    <option value="sign">签名</option>
+    <option value="mat">物料(球衣)</option>
+  </select>
+</div>
+
+<div class="table-wrap">
+  <table>
+    <thead id="tableHead"></thead>
+    <tbody id="tableBody"></tbody>
+  </table>
+  <div class="empty-state" id="emptyState" style="display:none;">没有匹配的记录</div>
+</div>
+
+<div class="footer">数据来源: 香香小桃子.xlsx | 汇率 1 GBP = 9 CNY | eBay回本价 = 成本 / 0.935</div>
+
+<script>
+const RATE = 9;
+
+const cards = [
+  // 卡淘购入
+  {id:"K001",player:"Jude Bellingham",series:"Select",year:"2025-26",rc:false,sign:false,mat:true,number:"/199",buyer:"香香",source:"卡淘",costCNY:72,soldPrice:null,status:"持有",note:"物料类型据标题初判"},
+  {id:"K002",player:"Lee Dixon",series:"Impeccable",year:"2021-22",rc:false,sign:true,mat:false,number:"/148",buyer:"香香",source:"卡淘",costCNY:145,soldPrice:null,status:"持有",note:"签字"},
+  {id:"K003",player:"William Saliba",series:"UCC",year:"2025-26",rc:false,sign:true,mat:false,number:"未见",buyer:"香香",source:"卡淘",costCNY:170,soldPrice:null,status:"持有",note:"标题含签名"},
+  {id:"K004",player:"Desire Doue",series:"Chrome",year:"2022-23",rc:true,sign:false,mat:false,number:"/10",buyer:"香香",source:"卡淘",costCNY:292.73,soldPrice:null,status:"持有",note:"RC及10编"},
+  {id:"K005",player:"Desire Doue",series:"Donruss",year:"2025-26",rc:false,sign:false,mat:false,number:"未见",buyer:"香香",source:"卡淘",costCNY:31,soldPrice:null,status:"持有",note:"FIFA世界杯之路"},
+  {id:"K006",player:"Antonee Robinson",series:"National Treasures",year:"2022",rc:false,sign:false,mat:true,number:"/25",buyer:"香香",source:"卡淘",costCNY:30,soldPrice:null,status:"持有",note:"国宝物料"},
+  {id:"K007",player:"Jamal Musiala",series:"Prizm FIFA World Cup",year:"2026",rc:false,sign:false,mat:false,number:"/18",buyer:"香香",source:"卡淘",costCNY:368,soldPrice:null,status:"持有",note:"17/18编；稀有平行"},
+  {id:"K008",player:"Marco van Basten",series:"National Treasures",year:"2022",rc:false,sign:true,mat:false,number:"/99",buyer:"香香",source:"卡淘",costCNY:843,soldPrice:null,status:"持有",note:"签字；非物料"},
+  {id:"K009",player:"Senny Mayulu",series:"Merlin Chrome",year:"2024-25",rc:true,sign:true,mat:false,number:"未见",buyer:"香香",source:"卡淘",costCNY:169,soldPrice:null,status:"持有",note:"签名/签字"},
+  {id:"K010",player:"Jamal Musiala",series:"Chrome",year:"2021",rc:true,sign:false,mat:false,number:"/199",buyer:"香香",source:"卡淘",costCNY:114,soldPrice:null,status:"持有",note:"RC及199编"},
+  {id:"K011",player:"Desire Doue",series:"Select Road to WC",year:"2025-26",rc:false,sign:false,mat:false,number:"/199(待核)",buyer:"香香",source:"卡淘",costCNY:89,soldPrice:null,status:"持有",note:"可能两卡同捆"},
+  {id:"K012",player:"Trey Nyoni",series:"Merlin",year:"2025",rc:true,sign:false,mat:false,number:"/250",buyer:"香香",source:"卡淘",costCNY:38.1,soldPrice:null,status:"持有",note:""},
+  {id:"K013",player:"Son Heung-min",series:"Impeccable",year:"2022-23",rc:false,sign:false,mat:false,number:"/65",buyer:"香香",source:"卡淘",costCNY:119.88,soldPrice:null,status:"持有",note:"金属卡不等于球衣物料"},
+  {id:"K014",player:"Bruno Fernandes",series:"National Treasures",year:"2022",rc:false,sign:false,mat:true,number:"/25",buyer:"香香",source:"卡淘",costCNY:142,soldPrice:null,status:"持有",note:"三窗球衣物料"},
+  {id:"K015",player:"Michael Olise",series:"Chronicles",year:"2021-22",rc:true,sign:false,mat:false,number:"未见",buyer:"香香",source:"卡淘",costCNY:364,soldPrice:null,status:"持有",note:"第1张同款"},
+  {id:"K016",player:"Michael Olise",series:"Chronicles",year:"2021-22",rc:true,sign:false,mat:false,number:"未见",buyer:"香香",source:"卡淘",costCNY:331,soldPrice:null,status:"持有",note:"第2张同款"},
+  {id:"K017",player:"Cristiano Ronaldo(待核)",series:"Chrome",year:"2023",rc:false,sign:false,mat:false,number:"未见",buyer:"香香",source:"卡淘",costCNY:198.38,soldPrice:null,status:"持有",note:"球员信息冲突"},
+  {id:"K018",player:"Desire Doue",series:"Select Road to WC",year:"2025-26",rc:false,sign:false,mat:false,number:"未见",buyer:"香香",source:"卡淘",costCNY:92.3,soldPrice:null,status:"持有",note:""},
+  {id:"K019",player:"Desire Doue",series:"Chrome",year:"2022-23",rc:true,sign:false,mat:false,number:"未见",buyer:"香香",source:"卡淘",costCNY:128.87,soldPrice:null,status:"持有",note:"欧战TC RC"},
+  {id:"K020",player:"Desire Doue",series:"Chrome",year:"2022-23",rc:true,sign:false,mat:false,number:"未见",buyer:"香香",source:"卡淘",costCNY:57.11,soldPrice:null,status:"持有",note:"欧战RC"},
+  {id:"K021",player:"Yan Diomande",series:"Prizm",year:"2025-26",rc:true,sign:false,mat:false,number:"/299(待核)",buyer:"香香",source:"卡淘",costCNY:416,soldPrice:null,status:"持有",note:""},
+  {id:"K022",player:"Desire Doue",series:"UCC",year:"2026",rc:false,sign:false,mat:false,number:"/50",buyer:"香香",source:"卡淘",costCNY:80.52,soldPrice:null,status:"持有",note:"22/50编"},
+  {id:"K023",player:"Michael Olise",series:"Donruss",year:"2021-22",rc:true,sign:false,mat:false,number:"未见",buyer:"香香",source:"卡淘",costCNY:77.1,soldPrice:null,status:"持有",note:""},
+  {id:"K024",player:"Desire Doue",series:"Chrome",year:"2023",rc:true,sign:false,mat:false,number:"/250",buyer:"香香",source:"卡淘",costCNY:420,soldPrice:null,status:"持有",note:"218/250编"},
+  {id:"K025",player:"Jude Bellingham",series:"Prizm",year:"2022",rc:false,sign:false,mat:false,number:"/299",buyer:"香香",source:"卡淘",costCNY:208.28,soldPrice:null,status:"持有",note:"163/299编"},
+  {id:"K026",player:"Jude Bellingham",series:"Merlin",year:"2021-22",rc:true,sign:false,mat:false,number:"待核",buyer:"香香",source:"卡淘",costCNY:611,soldPrice:null,status:"持有",note:"新秀黄色"},
+  {id:"K027",player:"Senny Mayulu",series:"UCC",year:"2026",rc:false,sign:true,mat:false,number:"未见",buyer:"香香",source:"卡淘",costCNY:84,soldPrice:null,status:"持有",note:"亲签"},
+  {id:"K028",player:"Yan Diomande",series:"Chrome",year:"2025-26",rc:true,sign:false,mat:false,number:"/150",buyer:"小桃子",source:"卡淘",costCNY:446,soldPrice:null,status:"持有",note:"073/150编"},
+  {id:"K029",player:"Desire Doue",series:"Chrome",year:"2023",rc:true,sign:false,mat:false,number:"未见",buyer:"小桃子",source:"卡淘",costCNY:208.2,soldPrice:null,status:"持有",note:"RC 蓝宝石"},
+  {id:"K030",player:"Desire Doue",series:"Merlin",year:"2023",rc:true,sign:false,mat:false,number:"/150",buyer:"小桃子",source:"卡淘",costCNY:622,soldPrice:null,status:"持有",note:"079/150编"},
+  {id:"K031",player:"Michael Olise",series:"Prizm",year:"2021-22",rc:true,sign:false,mat:false,number:"待核",buyer:"小桃子",source:"卡淘",costCNY:488,soldPrice:null,status:"持有",note:"编号不清"},
+  {id:"K032",player:"Jude Bellingham",series:"Finest X86",year:"2021-22",rc:true,sign:false,mat:false,number:"/125",buyer:"小桃子",source:"卡淘",costCNY:216,soldPrice:null,status:"持有",note:""},
+  {id:"K033",player:"Jude Bellingham",series:"Merlin",year:"2023",rc:false,sign:true,mat:false,number:"/89(待核)",buyer:"小桃子",source:"卡淘",costCNY:1815.01,soldPrice:null,status:"持有",note:"高价签名卡"},
+  {id:"K034",player:"Jude Bellingham",series:"Merlin",year:"2022",rc:false,sign:false,mat:false,number:"/25(待核)",buyer:"小桃子",source:"卡淘",costCNY:204.18,soldPrice:null,status:"持有",note:"24/25编"},
+  {id:"K035",player:"Jude Bellingham",series:"Chrome",year:"2023",rc:false,sign:false,mat:false,number:"未见",buyer:"小桃子",source:"卡淘",costCNY:135,soldPrice:null,status:"持有",note:"插卡折射"},
+  {id:"K036",player:"Eduardo Camavinga",series:"Crystal Premium",year:"2023-24",rc:false,sign:true,mat:true,number:"/25",buyer:"小桃子",source:"卡淘",costCNY:148.45,soldPrice:null,status:"持有",note:"物料及签字"},
+  {id:"K037",player:"Mason Mount",series:"National Treasures",year:"2020-21",rc:false,sign:false,mat:true,number:"/10",buyer:"小桃子",source:"卡淘",costCNY:380,soldPrice:null,status:"持有",note:""},
+  {id:"K038",player:"Van Nistelrooy",series:"Impeccable",year:"2023-24",rc:false,sign:true,mat:false,number:"/99",buyer:"小桃子",source:"卡淘",costCNY:1003,soldPrice:null,status:"持有",note:""},
+  {id:"K039",player:"Jude Bellingham",series:"Chrome",year:"2020-21",rc:true,sign:false,mat:false,number:"/99",buyer:"小桃子",source:"卡淘",costCNY:175.62,soldPrice:null,status:"持有",note:""},
+  {id:"K040",player:"Senny Mayulu",series:"Chrome",year:"2025",rc:true,sign:false,mat:false,number:"",buyer:"小桃子",source:"卡淘",costCNY:142,soldPrice:null,status:"持有",note:"签名待确认"},
+  {id:"K041",player:"Eduardo Camavinga",series:"Immaculate",year:"2022-23",rc:false,sign:false,mat:true,number:"/25",buyer:"小桃子",source:"卡淘",costCNY:145,soldPrice:null,status:"持有",note:""},
+  {id:"K042",player:"Senny Mayulu",series:"Chrome",year:"2025",rc:true,sign:false,mat:false,number:"72/99",buyer:"小桃子",source:"卡淘",costCNY:29.2,soldPrice:null,status:"持有",note:""},
+  {id:"K043",player:"Yan Diomande",series:"Chrome Bundesliga",year:"2025-26",rc:true,sign:false,mat:false,number:"007/150",buyer:"小桃子",source:"卡淘",costCNY:389,soldPrice:null,status:"持有",note:""},
+  {id:"K044",player:"Ilkay Gundogan",series:"Impeccable",year:"2024-25",rc:false,sign:false,mat:true,number:"/10",buyer:"小桃子",source:"卡淘",costCNY:108,soldPrice:null,status:"持有",note:""},
+  {id:"K045",player:"待确认(双人卡)",series:"Immaculate",year:"2023-24",rc:false,sign:false,mat:true,number:"/25",buyer:"小桃子",source:"卡淘",costCNY:111,soldPrice:null,status:"持有",note:""},
+  {id:"K046",player:"Vinicius Junior",series:"Immaculate",year:"2023-24",rc:false,sign:false,mat:true,number:"",buyer:"小桃子",source:"卡淘",costCNY:158,soldPrice:null,status:"持有",note:""},
+
+  // eBay购入
+  {id:"E001",player:"Andrea Pirlo",series:"Museum Collection",year:"2026",rc:false,sign:true,mat:false,number:"/50",buyer:"香香",source:"eBay",costCNY:402.66,soldPrice:null,status:"在英国",note:""},
+  {id:"E002",player:"Moises Caicedo",series:"Royalty PL",year:"2026",rc:false,sign:true,mat:false,number:"/99",buyer:"香香",source:"eBay",costCNY:634.95,soldPrice:810,status:"已售出",note:"咸鱼"},
+  {id:"E003",player:"Portland Trail Blazers",series:"Basketball Bundle",year:"待核",rc:false,sign:false,mat:false,number:"待核",buyer:"香香",source:"eBay",costCNY:71.73,soldPrice:null,status:"持有",note:"挂咸鱼"},
+  {id:"E004",player:"Cade Cunningham",series:"NBA Flagship",year:"2025-26",rc:false,sign:false,mat:false,number:"/5",buyer:"香香",source:"eBay",costCNY:811.71,soldPrice:830.28,status:"持有",note:"送代拍"},
+  {id:"E005",player:"Matheus Cunha",series:"Flagship PL",year:"2026",rc:false,sign:false,mat:false,number:"/5",buyer:"香香",source:"eBay",costCNY:596.16,soldPrice:null,status:"在英国",note:""},
+  {id:"E006",player:"Gareth Bale",series:"Chrome MLS",year:"2025",rc:false,sign:false,mat:false,number:"未见",buyer:"香香",source:"eBay",costCNY:450.27,soldPrice:null,status:"在英国",note:""},
+  {id:"E007",player:"Willian",series:"Flawless",year:"2015",rc:false,sign:false,mat:true,number:"/20",buyer:"香香",source:"eBay",costCNY:351.72,soldPrice:385.06,status:"持有",note:"送代拍"},
+  {id:"E008",player:"Jordan Pickford",series:"Royalty PL",year:"2026",rc:false,sign:true,mat:true,number:"/10",buyer:"香香",source:"eBay",costCNY:841.95,soldPrice:null,status:"持有",note:"挂咸鱼"},
+  {id:"E009",player:"Estevao",series:"Chrome UCC",year:"2025-26",rc:false,sign:false,mat:false,number:"未见",buyer:"香香",source:"eBay",costCNY:228.6,soldPrice:null,status:"持有",note:"挂咸鱼"},
+  {id:"E010",player:"Stephen Curry",series:"NBA Hoops",year:"2025-26",rc:false,sign:false,mat:false,number:"/99",buyer:"香香",source:"eBay",costCNY:153.81,soldPrice:null,status:"在英国",note:""},
+  {id:"E011",player:"Stephen Curry & Sabrina Ionescu",series:"Instant",year:"2023-24",rc:false,sign:false,mat:false,number:"/188",buyer:"香香",source:"eBay",costCNY:85.68,soldPrice:158.02,status:"持有",note:"送代拍"},
+  {id:"E012",player:"Michael Olise",series:"Merlin UCC",year:"2024-25",rc:false,sign:false,mat:false,number:"/75",buyer:"香香",source:"eBay",costCNY:81.36,soldPrice:103.13,status:"持有",note:"送代拍"},
+  {id:"E013",player:"Michael Olise",series:"Noir",year:"2024-25",rc:false,sign:false,mat:false,number:"/25",buyer:"香香",source:"eBay",costCNY:350.1,soldPrice:null,status:"持有",note:"送代拍 顶穿"},
+  {id:"E014",player:"Moises Caicedo",series:"Royalty PL",year:"2026",rc:false,sign:true,mat:false,number:"/99",buyer:"香香",source:"eBay",costCNY:619.2,soldPrice:677.88,status:"持有",note:"送代拍"},
+  {id:"E015",player:"Kimi Antonelli",series:"Chrome F1",year:"2024",rc:true,sign:false,mat:false,number:"#185",buyer:"香香",source:"eBay",costCNY:164.16,soldPrice:122.49,status:"持有",note:"送代拍 亏损"},
+  {id:"E016",player:"Eduardo Camavinga",series:"Merlin UCC",year:"待核",rc:false,sign:true,mat:false,number:"/25",buyer:"香香",source:"eBay",costCNY:154.98,soldPrice:185,status:"已售出",note:"咸鱼"},
+  {id:"E017",player:"Jamie Vardy",series:"Royalty PL",year:"2026",rc:false,sign:true,mat:false,number:"/99",buyer:"小桃子",source:"eBay",costCNY:967.41,soldPrice:925,status:"已售出",note:"咸鱼 亏损"},
+  {id:"E018",player:"Eduardo Camavinga",series:"Reverence",year:"2024-25",rc:false,sign:false,mat:true,number:"/10",buyer:"小桃子",source:"eBay",costCNY:423.72,soldPrice:null,status:"持有",note:"挂咸鱼"},
+  {id:"E019",player:"Naz Reid",series:"Chrome NBA",year:"2024",rc:false,sign:true,mat:false,number:"/10",buyer:"小桃子",source:"eBay",costCNY:133.65,soldPrice:62.65,status:"持有",note:"送代拍 亏损"},
+  {id:"E020",player:"Sol Campbell",series:"Royalty PL",year:"2026",rc:false,sign:true,mat:false,number:"/99",buyer:"小桃子",source:"eBay",costCNY:766.71,soldPrice:null,status:"持有",note:"挂咸鱼"},
+  {id:"E021",player:"Max Dowman",series:"Museum UCC",year:"2025-26",rc:true,sign:true,mat:false,number:"/60",buyer:"小桃子",source:"eBay",costCNY:1906.2,soldPrice:null,status:"持有",note:"价格倒挂!"},
+  {id:"E022",player:"Harry Kane",series:"Royalty PL",year:"2026",rc:false,sign:true,mat:true,number:"未见",buyer:"小桃子",source:"eBay",costCNY:1465.65,soldPrice:null,status:"持有",note:"挂咸鱼"},
+  {id:"E023",player:"Casemiro",series:"Pristine PL",year:"待核",rc:false,sign:true,mat:false,number:"/50",buyer:"小桃子",source:"eBay",costCNY:420.93,soldPrice:null,status:"带回英国",note:""},
+  {id:"E024",player:"Rio Ngumoha",series:"Inception",year:"2025-26",rc:true,sign:false,mat:false,number:"未见",buyer:"小桃子",source:"eBay",costCNY:644.85,soldPrice:null,status:"持有",note:"挂咸鱼"},
+  {id:"E025",player:"Jalen Williams",series:"Basketball",year:"待核",rc:false,sign:true,mat:false,number:"未见",buyer:"小桃子",source:"eBay",costCNY:275.58,soldPrice:null,status:"持有",note:"挂咸鱼"},
+  {id:"E027",player:"Tracy McGrady",series:"Definitive",year:"2025",rc:false,sign:true,mat:false,number:"/10",buyer:"小桃子",source:"eBay",costCNY:1892.7,soldPrice:null,status:"持有",note:"挂咸鱼"},
+  {id:"E028",player:"Pedri",series:"Chrome",year:"2021-22",rc:false,sign:true,mat:false,number:"/99",buyer:"小桃子",source:"eBay",costCNY:596.34,soldPrice:null,status:"持有",note:"挂咸鱼"},
+  {id:"E029",player:"Matheus Cunha",series:"Pristine",year:"待核",rc:false,sign:true,mat:true,number:"/50",buyer:"小桃子",source:"eBay",costCNY:545.4,soldPrice:null,status:"持有",note:"挂咸鱼"},
+  {id:"E030",player:"Kyrie Irving",series:"Flawless",year:"2017-18",rc:false,sign:true,mat:true,number:"未见",buyer:"小桃子",source:"eBay",costCNY:3775.05,soldPrice:null,status:"在英国",note:""},
+  {id:"E031",player:"Eli Junior Kroupi",series:"Pristine",year:"2026",rc:false,sign:true,mat:false,number:"/50",buyer:"小桃子",source:"eBay",costCNY:555.66,soldPrice:945,status:"已售出",note:"咸鱼"},
+  {id:"E032",player:"Taylor Hendricks",series:"Pristine NBA",year:"2026",rc:false,sign:true,mat:false,number:"未见",buyer:"小桃子",source:"eBay",costCNY:69.57,soldPrice:null,status:"持有",note:"挂咸鱼"},
+  {id:"E033",player:"Saliba",series:"",year:"",rc:false,sign:false,mat:false,number:"",buyer:"",source:"卡展",costCNY:0,soldPrice:null,status:"带回英国",note:""},
+  {id:"E034",player:"Musiala",series:"",year:"",rc:false,sign:false,mat:false,number:"",buyer:"",source:"卡展",costCNY:0,soldPrice:null,status:"带回英国",note:""},
+  {id:"EX01",player:"Rice",series:"",year:"",rc:false,sign:false,mat:false,number:"",buyer:"",source:"卡展",costCNY:450,soldPrice:null,status:"持有",note:"挂咸鱼"},
+  {id:"EX02",player:"Rose",series:"",year:"",rc:false,sign:false,mat:false,number:"",buyer:"",source:"卡展",costCNY:234,soldPrice:null,status:"持有",note:"挂咸鱼"},
+  {id:"EX03",player:"Embiid",series:"",year:"",rc:false,sign:false,mat:false,number:"",buyer:"",source:"卡展",costCNY:315,soldPrice:null,status:"持有",note:"挂咸鱼"},
+  {id:"EX04",player:"Booker",series:"",year:"",rc:false,sign:false,mat:false,number:"",buyer:"小桃子",source:"卡展",costCNY:315,soldPrice:468,status:"已售出",note:"咸鱼"},
+  {id:"EX05",player:"Knuppel",series:"",year:"",rc:false,sign:false,mat:false,number:"",buyer:"",source:"卡展",costCNY:72,soldPrice:null,status:"持有",note:"挂咸鱼"},
+];
+
+// Load saved edits from localStorage
+const savedEdits = JSON.parse(localStorage.getItem('cardEdits') || '{}');
+cards.forEach(c => {
+  if (savedEdits[c.id]) {
+    if (savedEdits[c.id].costCNY !== undefined) c.costCNY = savedEdits[c.id].costCNY;
+    if (savedEdits[c.id].soldPrice !== undefined) c.soldPrice = savedEdits[c.id].soldPrice;
+  }
+});
+
+function saveEdits() {
+  const edits = {};
+  cards.forEach(c => { edits[c.id] = { costCNY: c.costCNY, soldPrice: c.soldPrice }; });
+  localStorage.setItem('cardEdits', JSON.stringify(edits));
+}
+
+let currentTab = 'all';
+let sortCol = null;
+let sortDir = 'asc';
+
+function getBreakeven(c) {
+  if (!c.costCNY) return null;
+  if (c.source === 'eBay') return c.costCNY / 0.935;
+  return null;
+}
+
+function getProfit(c) {
+  if (c.soldPrice == null || c.costCNY == null) return null;
+  return c.soldPrice - c.costCNY;
+}
+
+function getFiltered() {
+  const search = document.getElementById('searchInput').value.toLowerCase();
+  const buyer = document.getElementById('filterBuyer').value;
+  const status = document.getElementById('filterStatus').value;
+  const special = document.getElementById('filterRC').value;
+
+  return cards.filter(c => {
+    if (currentTab === 'katao' && c.source !== '卡淘') return false;
+    if (currentTab === 'ebay' && c.source !== 'eBay' && c.source !== '卡展') return false;
+    if (buyer && c.buyer !== buyer) return false;
+    if (status && c.status !== status) return false;
+    if (special === 'rc' && !c.rc) return false;
+    if (special === 'sign' && !c.sign) return false;
+    if (special === 'mat' && !c.mat) return false;
+    if (search) {
+      const hay = [c.id,c.player,c.series,c.year,c.number,c.buyer,c.source,c.note].join(' ').toLowerCase();
+      if (!hay.includes(search)) return false;
+    }
+    return true;
+  });
+}
+
+function sortData(data) {
+  // Split into active and sold (有成交价的也算已售出)
+  const active = data.filter(c => c.status !== '已售出' && c.soldPrice == null);
+  const sold = data.filter(c => c.status === '已售出' || c.soldPrice != null);
+
+  if (sortCol) {
+    const sorter = (a, b) => {
+      let va = sortCol === 'breakeven' ? getBreakeven(a) : sortCol === 'profit' ? getProfit(a) : a[sortCol];
+      let vb = sortCol === 'breakeven' ? getBreakeven(b) : sortCol === 'profit' ? getProfit(b) : b[sortCol];
+      if (va == null) va = typeof vb === 'number' ? -Infinity : '';
+      if (vb == null) vb = typeof va === 'number' ? -Infinity : '';
+      if (typeof va === 'number' && typeof vb === 'number') return sortDir === 'asc' ? va - vb : vb - va;
+      if (typeof va === 'boolean') return sortDir === 'asc' ? (va === vb ? 0 : va ? -1 : 1) : (va === vb ? 0 : va ? 1 : -1);
+      return sortDir === 'asc' ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va));
+    };
+    active.sort(sorter);
+    sold.sort(sorter);
+  }
+
+  return { active, sold };
+}
+
+const columns = [
+  {key:'id', label:'ID'},
+  {key:'player', label:'球员'},
+  {key:'series', label:'系列'},
+  {key:'year', label:'年份'},
+  {key:'rc', label:'RC'},
+  {key:'sign', label:'签名'},
+  {key:'mat', label:'物料'},
+  {key:'number', label:'编号'},
+  {key:'buyer', label:'购买人'},
+  {key:'source', label:'来源'},
+  {key:'costCNY', label:'成本 ¥', editable: true},
+  {key:'breakeven', label:'回本价'},
+  {key:'soldPrice', label:'成交价', editable: true},
+  {key:'profit', label:'利润 ¥'},
+  {key:'status', label:'状态'},
+  {key:'note', label:'备注'},
+];
+
+function renderHead() {
+  const tr = document.createElement('tr');
+  columns.forEach(col => {
+    const th = document.createElement('th');
+    th.innerHTML = col.label + '<span class="sort-arrow"></span>';
+    if (sortCol === col.key) th.classList.add(sortDir === 'asc' ? 'sorted-asc' : 'sorted-desc');
+    th.onclick = () => {
+      if (sortCol === col.key) sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+      else { sortCol = col.key; sortDir = 'asc'; }
+      renderTable();
+    };
+    tr.appendChild(th);
+  });
+  document.getElementById('tableHead').innerHTML = '';
+  document.getElementById('tableHead').appendChild(tr);
+}
+
+function fmtMoney(v) {
+  if (v == null || v === '') return '-';
+  return '\u00A5' + Number(v).toFixed(2);
+}
+
+function makeEditableCell(card, field, value) {
+  const td = document.createElement('td');
+  td.className = 'editable-cell';
+  td.textContent = value != null ? fmtMoney(value) : '-';
+  td.ondblclick = function() {
+    if (td.querySelector('input')) return;
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.step = '0.01';
+    input.value = value != null ? value : '';
+    input.placeholder = '输入金额';
+    td.textContent = '';
+    td.appendChild(input);
+    input.focus();
+    input.select();
+
+    const commit = () => {
+      const raw = input.value.trim();
+      if (raw === '') {
+        card[field] = null;
+      } else {
+        card[field] = parseFloat(raw);
+      }
+      saveEdits();
+      renderTable();
+    };
+    input.onblur = commit;
+    input.onkeydown = (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); commit(); }
+      if (e.key === 'Escape') { renderTable(); }
+    };
+  };
+  return td;
+}
+
+function buildRow(c, isSold) {
+  const tr = document.createElement('tr');
+  if (isSold) tr.className = 'row-sold';
+  const profit = getProfit(c);
+  const breakeven = getBreakeven(c);
+
+  columns.forEach(col => {
+    if (col.key === 'costCNY') {
+      tr.appendChild(makeEditableCell(c, 'costCNY', c.costCNY));
+      return;
+    }
+    if (col.key === 'soldPrice') {
+      tr.appendChild(makeEditableCell(c, 'soldPrice', c.soldPrice));
+      return;
+    }
+    const td = document.createElement('td');
+    const v = col.key === 'breakeven' ? breakeven : col.key === 'profit' ? profit : c[col.key];
+    switch(col.key) {
+      case 'rc': td.innerHTML = v ? '<span class="rc-yes">RC</span>' : ''; break;
+      case 'sign': td.innerHTML = v ? '<span class="sign-yes">签</span>' : ''; break;
+      case 'mat': td.innerHTML = v ? '<span class="mat-yes">物料</span>' : ''; break;
+      case 'breakeven':
+        td.textContent = v != null ? fmtMoney(v) : '-';
+        td.style.color = '#6b7280';
+        break;
+      case 'profit':
+        if (v != null) {
+          td.textContent = fmtMoney(v);
+          if (!isSold) td.className = v >= 0 ? 'profit-cell-pos' : 'profit-cell-neg';
+        } else { td.textContent = '-'; }
+        break;
+      case 'status':
+        const cls = v === '已售出' ? 'badge-sold' : v === '在英国' || v === '带回英国' ? 'badge-uk' : 'badge-holding';
+        td.innerHTML = '<span class="badge ' + cls + '">' + (v||'-') + '</span>';
+        break;
+      case 'buyer':
+        if (v === '香香') td.innerHTML = '<span class="badge badge-xx">香香</span>';
+        else if (v === '小桃子') td.innerHTML = '<span class="badge badge-xtz">小桃子</span>';
+        else td.textContent = v || '-';
+        break;
+      case 'source':
+        if (v === '卡淘') td.innerHTML = '<span class="badge badge-katao">卡淘</span>';
+        else if (v === 'eBay') td.innerHTML = '<span class="badge badge-ebay">eBay</span>';
+        else if (v === '卡展') td.innerHTML = '<span class="badge badge-kazhan">卡展</span>';
+        else td.textContent = v || '-';
+        break;
+      default: td.textContent = v || '-'; break;
+    }
+    tr.appendChild(td);
+  });
+  return tr;
+}
+
+function renderTable() {
+  const filtered = getFiltered();
+  const { active, sold } = sortData(filtered);
+  renderHead();
+  updateStats(filtered);
+  const tbody = document.getElementById('tableBody');
+  tbody.innerHTML = '';
+  document.getElementById('emptyState').style.display = (active.length + sold.length) ? 'none' : 'block';
+
+  active.forEach(c => tbody.appendChild(buildRow(c, false)));
+
+  if (sold.length > 0) {
+    const divider = document.createElement('tr');
+    divider.className = 'sold-divider';
+    const dtd = document.createElement('td');
+    dtd.colSpan = columns.length;
+    dtd.textContent = '-- 已售出 (' + sold.length + ') --';
+    divider.appendChild(dtd);
+    tbody.appendChild(divider);
+    sold.forEach(c => tbody.appendChild(buildRow(c, true)));
+  }
+}
+
+function updateStats(filtered) {
+  const all = filtered;
+  const holding = all.filter(c => c.status !== '已售出' && c.soldPrice == null);
+  const sold = all.filter(c => c.status === '已售出' || c.soldPrice != null);
+  const totalCost = all.reduce((s,c) => s + (c.costCNY || 0), 0);
+  const holdingCost = holding.reduce((s,c) => s + (c.costCNY || 0), 0);
+  const totalProfit = all.map(getProfit).filter(p => p != null).reduce((s,p) => s + p, 0);
+
+  const stats = [
+    {label:'总卡数', value: all.length, sub: '持有 ' + holding.length + ' / 已售 ' + sold.length},
+    {label:'总成本', value: fmtMoney(totalCost), sub: '持仓 ' + fmtMoney(holdingCost)},
+    {label:'已实现利润', value: fmtMoney(totalProfit), sub: sold.length + ' 笔已结算', cls: totalProfit >= 0 ? 'profit-pos' : 'profit-neg'},
+    {label:'香香卡数', value: all.filter(c=>c.buyer==='香香').length, sub: '成本 ' + fmtMoney(all.filter(c=>c.buyer==='香香').reduce((s,c)=>s+(c.costCNY||0),0))},
+    {label:'小桃子卡数', value: all.filter(c=>c.buyer==='小桃子').length, sub: '成本 ' + fmtMoney(all.filter(c=>c.buyer==='小桃子').reduce((s,c)=>s+(c.costCNY||0),0))},
+  ];
+
+  document.getElementById('statsRow').innerHTML = stats.map(s =>
+    '<div class="stat-card"><div class="label">' + s.label + '</div><div class="value ' + (s.cls||'') + '">' + s.value + '</div><div class="sub">' + s.sub + '</div></div>'
+  ).join('');
+}
+
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+  renderTable();
+}
+
+renderTable();
+</script>
+</body>
+</html>
