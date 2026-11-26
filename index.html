@@ -99,6 +99,9 @@ tr.row-sold .rc-yes, tr.row-sold .sign-yes, tr.row-sold .mat-yes { color: #ccc; 
 .sql-block { background: #1e293b; color: #e2e8f0; padding: 14px; border-radius: 8px; font-size: 12px; white-space: pre-wrap; word-break: break-all; margin: 10px 0; font-family: monospace; position: relative; }
 .sql-block .copy-btn { position: absolute; top: 8px; right: 8px; background: #475569; color: #fff; border: none; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 11px; }
 .sql-block .copy-btn:hover { background: #64748b; }
+.edit-btn { background: none; border: 1px solid #d1d5db; border-radius: 6px; padding: 3px 8px; cursor: pointer; font-size: 11px; color: #666; transition: all .15s; }
+.edit-btn:hover { background: #3b82f6; color: #fff; border-color: #3b82f6; }
+tr.row-sold .edit-btn { opacity: .4; }
 </style>
 </head>
 <body>
@@ -183,6 +186,40 @@ tr.row-sold .rc-yes, tr.row-sold .sign-yes, tr.row-sold .mat-yes { color: #ccc; 
   <div class="modal-actions">
     <button class="btn btn-cancel" onclick="closeAddModal()">取消</button>
     <button class="btn btn-primary" onclick="submitNewCard()">添加</button>
+  </div>
+</div>
+</div>
+
+<!-- Edit Card Modal -->
+<div class="modal-overlay" id="editModal" style="display:none;" onclick="if(event.target===this)closeEditModal()">
+<div class="modal">
+  <h2>编辑卡牌 <span id="e_id" style="color:#999;font-size:14px;"></span></h2>
+  <div class="form-grid">
+    <div class="form-row"><label>球员</label><input id="e_player"></div>
+    <div class="form-row"><label>系列</label><input id="e_series"></div>
+    <div class="form-row"><label>年份</label><input id="e_year"></div>
+    <div class="form-row"><label>编号</label><input id="e_number"></div>
+    <div class="form-row"><label>购买人</label>
+      <select id="e_buyer"><option value="香香">香香</option><option value="小桃子">小桃子</option><option value="">未分配</option></select>
+    </div>
+    <div class="form-row"><label>来源</label>
+      <select id="e_source" onchange="updateEditCostLabel()"><option value="卡淘">卡淘</option><option value="eBay">eBay</option><option value="卡展">卡展</option></select>
+    </div>
+    <div class="form-row"><label id="e_cost_label">成本</label><input id="e_cost" type="number" step="0.01"></div>
+    <div class="form-row"><label>成交价 (CNY)</label><input id="e_sold" type="number" step="0.01"></div>
+    <div class="form-row"><label>状态</label>
+      <select id="e_status"><option value="持有">持有</option><option value="已售出">已售出</option><option value="在英国">在英国</option><option value="带回英国">带回英国</option></select>
+    </div>
+    <div class="form-row"><label>备注</label><input id="e_note"></div>
+  </div>
+  <div class="checkbox-row">
+    <label><input type="checkbox" id="e_rc"> RC 新秀</label>
+    <label><input type="checkbox" id="e_sign"> 签名</label>
+    <label><input type="checkbox" id="e_mat"> 物料</label>
+  </div>
+  <div class="modal-actions">
+    <button class="btn btn-cancel" onclick="closeEditModal()">取消</button>
+    <button class="btn btn-primary" onclick="submitEditCard()">保存</button>
   </div>
 </div>
 </div>
@@ -490,6 +527,67 @@ async function submitNewCard() {
   ['f_rc','f_sign','f_mat'].forEach(id => document.getElementById(id).checked = false);
 }
 
+// ==================== EDIT CARD MODAL ====================
+let editingCardId = null;
+
+function updateEditCostLabel() {
+  const src = document.getElementById('e_source').value;
+  const isGbp = src === 'eBay' || src === '卡展';
+  document.getElementById('e_cost_label').textContent = isGbp ? '成本 (GBP \u00A3)' : '成本 (CNY \u00A5)';
+}
+
+function showEditModal(id) {
+  const c = cards.find(x => x.id === id);
+  if (!c) return;
+  editingCardId = id;
+  document.getElementById('e_id').textContent = id;
+  document.getElementById('e_player').value = c.player || '';
+  document.getElementById('e_series').value = c.series || '';
+  document.getElementById('e_year').value = c.year || '';
+  document.getElementById('e_number').value = c.number || '';
+  document.getElementById('e_buyer').value = c.buyer || '';
+  document.getElementById('e_source').value = c.source || '卡淘';
+  const gbp = c.source === 'eBay' || c.source === '卡展';
+  document.getElementById('e_cost').value = c.cost_cny != null ? (gbp ? (c.cost_cny / 9).toFixed(2) : c.cost_cny) : '';
+  document.getElementById('e_sold').value = c.sold_price != null ? c.sold_price : '';
+  document.getElementById('e_status').value = c.status || '持有';
+  document.getElementById('e_note').value = c.note || '';
+  document.getElementById('e_rc').checked = !!c.rc;
+  document.getElementById('e_sign').checked = !!c.sign;
+  document.getElementById('e_mat').checked = !!c.mat;
+  updateEditCostLabel();
+  document.getElementById('editModal').style.display = 'flex';
+}
+
+function closeEditModal() { document.getElementById('editModal').style.display = 'none'; editingCardId = null; }
+
+async function submitEditCard() {
+  if (!editingCardId) return;
+  const source = document.getElementById('e_source').value;
+  const gbp = source === 'eBay' || source === '卡展';
+  const costRaw = parseFloat(document.getElementById('e_cost').value);
+  const soldRaw = document.getElementById('e_sold').value.trim();
+
+  const fields = {
+    player: document.getElementById('e_player').value.trim(),
+    series: document.getElementById('e_series').value.trim(),
+    year: document.getElementById('e_year').value.trim(),
+    number: document.getElementById('e_number').value.trim(),
+    buyer: document.getElementById('e_buyer').value,
+    source: source,
+    cost_cny: isNaN(costRaw) ? 0 : (gbp ? costRaw * 9 : costRaw),
+    sold_price: soldRaw === '' ? null : parseFloat(soldRaw),
+    status: document.getElementById('e_status').value,
+    note: document.getElementById('e_note').value.trim(),
+    rc: document.getElementById('e_rc').checked,
+    sign: document.getElementById('e_sign').checked,
+    mat: document.getElementById('e_mat').checked,
+  };
+
+  await updateCard(editingCardId, fields);
+  closeEditModal();
+}
+
 // ==================== TABLE LOGIC ====================
 function isSold(c) { return c.status === '已售出' || c.sold_price != null; }
 function getBreakeven(c) { return c.source === 'eBay' && c.cost_cny ? c.cost_cny / 0.935 : null; }
@@ -540,6 +638,7 @@ function splitAndSort(data) {
 }
 
 const columns = [
+  {key:'_edit', label:''},
   {key:'id', label:'ID'},
   {key:'player', label:'球员'},
   {key:'series', label:'系列'},
@@ -567,6 +666,7 @@ function renderHead() {
   const tr = document.createElement('tr');
   columns.forEach(col => {
     const th = document.createElement('th');
+    if (col.key === '_edit') { th.style.width = '50px'; th.style.cursor = 'default'; tr.appendChild(th); return; }
     th.innerHTML = col.label + '<span class="sort-arrow"></span>';
     if (sortCol === col.key) th.classList.add(sortDir === 'asc' ? 'sorted-asc' : 'sorted-desc');
     th.onclick = () => {
@@ -628,6 +728,16 @@ function buildRow(c, sold) {
   const breakeven = getBreakeven(c);
 
   columns.forEach(col => {
+    if (col.key === '_edit') {
+      const td = document.createElement('td');
+      const btn = document.createElement('button');
+      btn.className = 'edit-btn';
+      btn.textContent = '编辑';
+      btn.onclick = () => showEditModal(c.id);
+      td.appendChild(btn);
+      tr.appendChild(td);
+      return;
+    }
     if (col.key === 'cost_cny') { tr.appendChild(makeEditableCell(c, 'cost_cny', c.cost_cny)); return; }
     if (col.key === 'sold_price') { tr.appendChild(makeEditableCell(c, 'sold_price', c.sold_price)); return; }
     const td = document.createElement('td');
