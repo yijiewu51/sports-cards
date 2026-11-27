@@ -102,6 +102,10 @@ tr.row-sold .rc-yes, tr.row-sold .sign-yes, tr.row-sold .mat-yes { color: #ccc; 
 .edit-btn { background: none; border: 1px solid #d1d5db; border-radius: 6px; padding: 3px 8px; cursor: pointer; font-size: 11px; color: #666; transition: all .15s; }
 .edit-btn:hover { background: #3b82f6; color: #fff; border-color: #3b82f6; }
 tr.row-sold .edit-btn { opacity: .4; }
+.currency-input-wrap { display: flex; gap: 0; align-items: center; }
+.currency-input-wrap input { border-radius: 4px 0 0 4px !important; border-right: none !important; }
+.currency-toggle { padding: 2px 8px; border: 1px solid #3b82f6; border-radius: 0 4px 4px 0; background: #eef2ff; cursor: pointer; font-size: 12px; font-weight: 700; color: #3b82f6; white-space: nowrap; user-select: none; min-width: 28px; text-align: center; }
+.currency-toggle:hover { background: #3b82f6; color: #fff; }
 </style>
 </head>
 <body>
@@ -697,26 +701,69 @@ function makeEditableCell(card, field, value) {
   td.textContent = value != null ? (field === 'cost_cny' ? fmtCost(card, field, value) : fmtMoney(value)) : '-';
   td.ondblclick = function() {
     if (td.querySelector('input')) return;
+    td.textContent = '';
+
+    const isSoldField = field === 'sold_price';
+    let useGBP = gbp; // cost always follows source; sold_price defaults to CNY
+
     const input = document.createElement('input');
     input.type = 'number';
     input.step = '0.01';
-    input.value = value != null ? (gbp ? (value / 9).toFixed(2) : value) : '';
-    input.placeholder = gbp ? '输入英镑' : '输入金额';
-    td.textContent = '';
-    td.appendChild(input);
-    input.focus();
-    input.select();
+    input.value = value != null ? (useGBP ? (value / 9).toFixed(2) : value) : '';
+    input.placeholder = useGBP ? '英镑金额' : '人民币金额';
+
     const commit = () => {
       const raw = input.value.trim();
       let newVal = raw === '' ? null : parseFloat(raw);
-      if (newVal != null && gbp) newVal = newVal * 9;
+      if (newVal != null && useGBP) newVal = newVal * 9;
       updateCard(card.id, { [field]: newVal });
     };
-    input.onblur = commit;
     input.onkeydown = (e) => {
       if (e.key === 'Enter') { e.preventDefault(); commit(); }
       if (e.key === 'Escape') renderTable();
     };
+
+    if (isSoldField) {
+      // Wrap input + currency toggle button
+      const wrap = document.createElement('div');
+      wrap.className = 'currency-input-wrap';
+      const toggle = document.createElement('div');
+      toggle.className = 'currency-toggle';
+      toggle.textContent = '\u00A5';
+      toggle.title = '点击切换 \u00A5/\u00A3';
+      toggle.onclick = (e) => {
+        e.stopPropagation();
+        const curVal = input.value.trim();
+        if (useGBP) {
+          // switching GBP -> CNY: convert displayed value
+          useGBP = false;
+          toggle.textContent = '\u00A5';
+          if (curVal) input.value = (parseFloat(curVal) * 9).toFixed(2);
+          input.placeholder = '人民币金额';
+        } else {
+          // switching CNY -> GBP
+          useGBP = true;
+          toggle.textContent = '\u00A3';
+          if (curVal) input.value = (parseFloat(curVal) / 9).toFixed(2);
+          input.placeholder = '英镑金额';
+        }
+        input.focus();
+      };
+      wrap.appendChild(input);
+      wrap.appendChild(toggle);
+      td.appendChild(wrap);
+      // prevent blur commit when clicking toggle
+      input.onblur = (e) => {
+        if (e.relatedTarget === toggle || td.contains(e.relatedTarget)) return;
+        commit();
+      };
+      toggle.tabIndex = 0;
+    } else {
+      td.appendChild(input);
+      input.onblur = commit;
+    }
+    input.focus();
+    input.select();
   };
   return td;
 }
