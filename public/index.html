@@ -125,9 +125,10 @@ tr.row-sold .edit-btn { opacity: .4; }
   <div class="tab active" data-tab="all" onclick="switchTab('all')">全部</div>
   <div class="tab" data-tab="katao" onclick="switchTab('katao')">卡淘购入</div>
   <div class="tab" data-tab="ebay" onclick="switchTab('ebay')">eBay购入</div>
+  <div class="tab" data-tab="settle" onclick="switchTab('settle')">结算</div>
 </div>
 
-<div class="controls">
+<div class="controls" id="mainControls">
   <input type="text" id="searchInput" placeholder="搜索球员、系列、编号..." oninput="renderTable()">
   <select id="filterBuyer" onchange="renderTable()">
     <option value="">全部购买人</option>
@@ -155,6 +156,23 @@ tr.row-sold .edit-btn { opacity: .4; }
     <tbody id="tableBody"></tbody>
   </table>
   <div class="empty-state" id="emptyState" style="display:none;">没有匹配的记录</div>
+</div>
+
+<!-- Settlement Page -->
+<div id="settlePage" style="display:none; padding: 0 32px 32px;">
+  <div class="stats-row" id="settleStats"></div>
+  <table>
+    <thead>
+      <tr>
+        <th style="width:50px;cursor:default;"></th>
+        <th>ID</th><th>球员</th><th>系列</th><th>购买人</th><th>来源</th>
+        <th>成本</th><th>成交价</th><th>利润</th>
+        <th>购买人回收</th><th>香香分润</th><th>小桃子分润</th>
+        <th>状态</th>
+      </tr>
+    </thead>
+    <tbody id="settleBody"></tbody>
+  </table>
 </div>
 
 <div class="footer">eBay回本价 = 成本 / 0.935</div>
@@ -327,7 +345,8 @@ async function loadCards() {
   try {
     const res = await fetch('/api/cards');
     cards = await res.json();
-    renderTable();
+    if (currentTab === 'settle') renderSettlePage();
+    else renderTable();
   } catch(e) {
     console.error('Failed to load cards:', e);
   }
@@ -751,7 +770,119 @@ function updateStats(filtered) {
 function switchTab(tab) {
   currentTab = tab;
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
-  renderTable();
+  const isSettle = tab === 'settle';
+  document.getElementById('mainControls').style.display = isSettle ? 'none' : 'flex';
+  document.querySelector('.table-wrap').style.display = isSettle ? 'none' : 'block';
+  document.getElementById('settlePage').style.display = isSettle ? 'block' : 'none';
+  if (isSettle) renderSettlePage();
+  else renderTable();
+}
+
+// ==================== SETTLEMENT PAGE ====================
+function renderSettlePage() {
+  const sold = cards.filter(c => isSold(c));
+
+  // Stats
+  let totalProfit = 0, settledProfit = 0, unsettledProfit = 0;
+  let xxOwed = 0, xtzOwed = 0; // unsettled amounts owed to each
+
+  sold.forEach(c => {
+    const profit = (c.sold_price || 0) - (c.cost_cny || 0);
+    totalProfit += profit;
+    if (c.settled) {
+      settledProfit += profit;
+    } else {
+      unsettledProfit += profit;
+      // Buyer gets back cost, profit split 50/50
+      const halfProfit = profit / 2;
+      if (c.buyer === '香香') {
+        xxOwed += c.cost_cny + halfProfit;   // 香香 gets back cost + half profit
+        xtzOwed += halfProfit;               // 小桃子 gets half profit
+      } else if (c.buyer === '小桃子') {
+        xtzOwed += c.cost_cny + halfProfit;
+        xxOwed += halfProfit;
+      } else {
+        // No buyer assigned - split everything 50/50
+        xxOwed += (c.sold_price || 0) / 2;
+        xtzOwed += (c.sold_price || 0) / 2;
+      }
+    }
+  });
+
+  const settledCount = sold.filter(c => c.settled).length;
+  const unsettledCount = sold.length - settledCount;
+
+  document.getElementById('settleStats').innerHTML = [
+    {label:'已售总数', value: sold.length, sub: '已结算 ' + settledCount + ' / 未结算 ' + unsettledCount},
+    {label:'总利润', value: fmtMoney(totalProfit), sub: '所有已售卡片', cls: totalProfit >= 0 ? 'profit-pos' : 'profit-neg'},
+    {label:'未结算利润', value: fmtMoney(unsettledProfit), sub: '待分配', cls: unsettledProfit >= 0 ? 'profit-pos' : 'profit-neg'},
+    {label:'香香应得', value: fmtMoney(xxOwed), sub: '未结算部分（含本金回收）'},
+    {label:'小桃子应得', value: fmtMoney(xtzOwed), sub: '未结算部分（含本金回收）'},
+  ].map(s =>
+    '<div class="stat-card"><div class="label">' + s.label + '</div><div class="value ' + (s.cls||'') + '">' + s.value + '</div><div class="sub">' + s.sub + '</div></div>'
+  ).join('');
+
+  // Table rows
+  const tbody = document.getElementById('settleBody');
+  tbody.innerHTML = '';
+  sold.forEach(c => {
+    const profit = (c.sold_price || 0) - (c.cost_cny || 0);
+    const halfProfit = profit / 2;
+    let buyerRecov = 0, xxShare = 0, xtzShare = 0;
+    if (c.buyer === '香香') {
+      buyerRecov = c.cost_cny || 0;
+      xxShare = halfProfit;
+      xtzShare = halfProfit;
+    } else if (c.buyer === '小桃子') {
+      buyerRecov = c.cost_cny || 0;
+      xxShare = halfProfit;
+      xtzShare = halfProfit;
+    } else {
+      buyerRecov = 0;
+      xxShare = (c.sold_price || 0) / 2;
+      xtzShare = (c.sold_price || 0) / 2;
+    }
+
+    const tr = document.createElement('tr');
+    if (c.settled) tr.style.opacity = '0.5';
+
+    // Checkbox
+    const tdCheck = document.createElement('td');
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = !!c.settled;
+    cb.onchange = () => updateCard(c.id, { settled: cb.checked }).then(() => renderSettlePage());
+    tdCheck.appendChild(cb);
+    tr.appendChild(tdCheck);
+
+    // Data cells
+    const cells = [
+      c.id,
+      c.player,
+      c.series || '-',
+      c.buyer ? '<span class="badge ' + (c.buyer === '香香' ? 'badge-xx' : 'badge-xtz') + '">' + c.buyer + '</span>' : '-',
+      c.source || '-',
+      fmtCost(c, 'cost_cny', c.cost_cny),
+      fmtMoney(c.sold_price),
+      fmtMoney(profit),
+      fmtMoney(buyerRecov),
+      fmtMoney(xxShare),
+      fmtMoney(xtzShare),
+      c.settled ? '<span class="badge badge-sold">已结算</span>' : '<span class="badge badge-holding">未结算</span>',
+    ];
+    cells.forEach(html => {
+      const td = document.createElement('td');
+      td.innerHTML = html;
+      tr.appendChild(td);
+    });
+
+    // Color the profit cell
+    const profitTd = tr.children[8]; // 0=check,1=id,2=player,3=series,4=buyer,5=source,6=cost,7=sold,8=profit
+    if (profit >= 0) profitTd.className = 'profit-cell-pos';
+    else profitTd.className = 'profit-cell-neg';
+
+    tbody.appendChild(tr);
+  });
 }
 
 // ==================== INIT ====================

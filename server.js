@@ -26,8 +26,12 @@ db.exec(`CREATE TABLE IF NOT EXISTS cards (
   sold_price REAL,
   status TEXT DEFAULT '持有',
   note TEXT DEFAULT '',
+  settled INTEGER DEFAULT 0,
   created_at TEXT DEFAULT (datetime('now'))
 )`);
+
+// Add settled column if missing (for existing databases)
+try { db.exec('ALTER TABLE cards ADD COLUMN settled INTEGER DEFAULT 0'); } catch(e) {}
 
 // Seed if empty
 const count = db.prepare('SELECT COUNT(*) as c FROM cards').get().c;
@@ -62,7 +66,7 @@ app.get('/api/events', (req, res) => {
 
 // ---------- API ----------
 function rowToCard(r) {
-  return { ...r, rc: !!r.rc, sign: !!r.sign, mat: !!r.mat };
+  return { ...r, rc: !!r.rc, sign: !!r.sign, mat: !!r.mat, settled: !!r.settled };
 }
 
 app.get('/api/cards', (req, res) => {
@@ -85,7 +89,7 @@ app.put('/api/cards/:id', (req, res) => {
   for (const [k, v] of Object.entries(fields)) {
     if (k === 'id' || k === 'created_at') continue;
     sets.push(`${k} = ?`);
-    if (k === 'rc' || k === 'sign' || k === 'mat') vals.push(v ? 1 : 0);
+    if (k === 'rc' || k === 'sign' || k === 'mat' || k === 'settled') vals.push(v ? 1 : 0);
     else vals.push(v);
   }
   if (sets.length === 0) return res.json({ ok: true });
