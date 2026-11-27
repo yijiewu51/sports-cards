@@ -9,8 +9,8 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // ---------- Database ----------
 const db = createClient({
-  url: (process.env.TURSO_URL || 'file:cards.db').trim(),
-  authToken: (process.env.TURSO_AUTH_TOKEN || '').trim() || undefined,
+  url: (process.env.TURSO_URL || 'file:cards.db').replace(/\s/g, ''),
+  authToken: (process.env.TURSO_AUTH_TOKEN || '').replace(/\s/g, '') || undefined,
 });
 
 async function initDB() {
