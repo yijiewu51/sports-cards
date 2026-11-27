@@ -853,13 +853,36 @@ function renderSettlePage() {
     const tr = document.createElement('tr');
     if (c.settled) tr.style.opacity = '0.5';
 
-    // Checkbox
+    // Settle button
     const tdCheck = document.createElement('td');
-    const cb = document.createElement('input');
-    cb.type = 'checkbox';
-    cb.checked = !!c.settled;
-    cb.onchange = () => updateCard(c.id, { settled: cb.checked }).then(() => renderSettlePage());
-    tdCheck.appendChild(cb);
+    if (c.settled) {
+      const btn = document.createElement('button');
+      btn.className = 'edit-btn';
+      btn.textContent = '撤销';
+      btn.onclick = () => { if (confirm('确定撤销结算？')) updateCard(c.id, { settled: false }).then(() => renderSettlePage()); };
+      tdCheck.appendChild(btn);
+    } else {
+      const btn = document.createElement('button');
+      btn.className = 'btn btn-primary btn-sm';
+      btn.textContent = '结算';
+      btn.onclick = () => {
+        const buyer = c.buyer || '未分配';
+        const other = buyer === '香香' ? '小桃子' : '香香';
+        let msg = `【${c.player}】结算明细：\n\n`;
+        msg += `成交价：${fmtMoney(c.sold_price)}\n`;
+        msg += `成本：${fmtMoney(c.cost_cny)}\n`;
+        msg += `利润：${fmtMoney(profit)}\n\n`;
+        msg += `💰 分配方式：\n`;
+        msg += `  ${buyer}（购买人）回收本金：${fmtMoney(buyerRecov)}\n`;
+        msg += `  ${buyer} 分润：${fmtMoney(buyer === '香香' ? xxShare : xtzShare)}\n`;
+        msg += `  ${other} 分润：${fmtMoney(buyer === '香香' ? xtzShare : xxShare)}\n\n`;
+        msg += `→ 需转给${other}：${fmtMoney(buyer === '香香' ? xtzShare : xxShare)}\n`;
+        msg += `→ ${buyer}自留：${fmtMoney(buyerRecov + (buyer === '香香' ? xxShare : xtzShare))}\n\n`;
+        msg += `确定结算吗？`;
+        if (confirm(msg)) updateCard(c.id, { settled: true }).then(() => renderSettlePage());
+      };
+      tdCheck.appendChild(btn);
+    }
     tr.appendChild(tdCheck);
 
     // Data cells
