@@ -166,7 +166,7 @@ tr.row-sold .edit-btn { opacity: .4; }
       <tr>
         <th style="width:50px;cursor:default;"></th>
         <th>ID</th><th>球员</th><th>系列</th><th>购买人</th><th>来源</th>
-        <th>成本</th><th>成交价</th><th>利润</th>
+        <th>成本</th><th>成交价</th><th>利润</th><th>利润率</th>
         <th>购买人回收</th><th>香香分润</th><th>小桃子分润</th>
         <th>状态</th>
       </tr>
@@ -497,6 +497,7 @@ async function submitEditCard() {
 function isSold(c) { return c.status === '已售出' || c.sold_price != null; }
 function getBreakeven(c) { return c.source === 'eBay' && c.cost_cny ? c.cost_cny / 0.935 : null; }
 function getProfit(c) { return c.sold_price != null && c.cost_cny != null ? c.sold_price - c.cost_cny : null; }
+function getProfitRate(c) { const p = getProfit(c); return p != null && c.cost_cny ? p / c.cost_cny : null; }
 
 function getFiltered() {
   const search = document.getElementById('searchInput').value.toLowerCase();
@@ -528,8 +529,8 @@ function splitAndSort(data) {
   const sold = data.filter(c => isSold(c));
   if (sortCol) {
     const sorter = (a, b) => {
-      let va = sortCol === 'breakeven' ? getBreakeven(a) : sortCol === 'profit' ? getProfit(a) : a[sortCol];
-      let vb = sortCol === 'breakeven' ? getBreakeven(b) : sortCol === 'profit' ? getProfit(b) : b[sortCol];
+      let va = sortCol === 'breakeven' ? getBreakeven(a) : sortCol === 'profit' ? getProfit(a) : sortCol === 'profit_rate' ? getProfitRate(a) : a[sortCol];
+      let vb = sortCol === 'breakeven' ? getBreakeven(b) : sortCol === 'profit' ? getProfit(b) : sortCol === 'profit_rate' ? getProfitRate(b) : b[sortCol];
       if (va == null) va = typeof vb === 'number' ? -Infinity : '';
       if (vb == null) vb = typeof va === 'number' ? -Infinity : '';
       if (typeof va === 'number' && typeof vb === 'number') return sortDir === 'asc' ? va - vb : vb - va;
@@ -558,6 +559,7 @@ const columns = [
   {key:'breakeven', label:'回本价'},
   {key:'sold_price', label:'成交价', editable: true},
   {key:'profit', label:'利润 \u00A5'},
+  {key:'profit_rate', label:'利润率'},
   {key:'status', label:'状态'},
   {key:'note', label:'备注'},
 ];
@@ -689,7 +691,7 @@ function buildRow(c, sold) {
     if (col.key === 'cost_cny') { tr.appendChild(makeEditableCell(c, 'cost_cny', c.cost_cny)); return; }
     if (col.key === 'sold_price') { tr.appendChild(makeEditableCell(c, 'sold_price', c.sold_price)); return; }
     const td = document.createElement('td');
-    const v = col.key === 'breakeven' ? breakeven : col.key === 'profit' ? profit : c[col.key];
+    const v = col.key === 'breakeven' ? breakeven : col.key === 'profit' ? profit : col.key === 'profit_rate' ? getProfitRate(c) : c[col.key];
     switch(col.key) {
       case 'rc': td.innerHTML = v ? '<span class="rc-yes">RC</span>' : ''; break;
       case 'sign': td.innerHTML = v ? '<span class="sign-yes">签</span>' : ''; break;
@@ -697,6 +699,10 @@ function buildRow(c, sold) {
       case 'breakeven': td.textContent = v != null ? fmtMoney(v) : '-'; td.style.color = '#6b7280'; break;
       case 'profit':
         if (v != null) { td.textContent = fmtMoney(v); if (!sold) td.className = v >= 0 ? 'profit-cell-pos' : 'profit-cell-neg'; }
+        else td.textContent = '-';
+        break;
+      case 'profit_rate':
+        if (v != null) { td.textContent = (v * 100).toFixed(1) + '%'; if (!sold) td.className = v >= 0 ? 'profit-cell-pos' : 'profit-cell-neg'; }
         else td.textContent = '-';
         break;
       case 'status':
@@ -783,10 +789,11 @@ function renderSettlePage() {
   const sold = cards.filter(c => isSold(c));
 
   // Stats
-  let totalProfit = 0, settledProfit = 0, unsettledProfit = 0;
+  let totalProfit = 0, totalCost = 0, settledProfit = 0, unsettledProfit = 0;
   let xxOwed = 0, xtzOwed = 0; // unsettled amounts owed to each
 
   sold.forEach(c => {
+    totalCost += (c.cost_cny || 0);
     const profit = (c.sold_price || 0) - (c.cost_cny || 0);
     totalProfit += profit;
     if (c.settled) {
@@ -814,7 +821,7 @@ function renderSettlePage() {
 
   document.getElementById('settleStats').innerHTML = [
     {label:'已售总数', value: sold.length, sub: '已结算 ' + settledCount + ' / 未结算 ' + unsettledCount},
-    {label:'总利润', value: fmtMoney(totalProfit), sub: '所有已售卡片', cls: totalProfit >= 0 ? 'profit-pos' : 'profit-neg'},
+    {label:'总利润', value: fmtMoney(totalProfit), sub: '综合利润率 ' + (totalCost ? (totalProfit/totalCost*100).toFixed(1) + '%' : '-'), cls: totalProfit >= 0 ? 'profit-pos' : 'profit-neg'},
     {label:'未结算利润', value: fmtMoney(unsettledProfit), sub: '待分配', cls: unsettledProfit >= 0 ? 'profit-pos' : 'profit-neg'},
     {label:'香香应得', value: fmtMoney(xxOwed), sub: '未结算部分（含本金回收）'},
     {label:'小桃子应得', value: fmtMoney(xtzOwed), sub: '未结算部分（含本金回收）'},
@@ -865,6 +872,7 @@ function renderSettlePage() {
       fmtCost(c, 'cost_cny', c.cost_cny),
       fmtMoney(c.sold_price),
       fmtMoney(profit),
+      c.cost_cny ? (profit / c.cost_cny * 100).toFixed(1) + '%' : '-',
       fmtMoney(buyerRecov),
       fmtMoney(xxShare),
       fmtMoney(xtzShare),
@@ -876,10 +884,11 @@ function renderSettlePage() {
       tr.appendChild(td);
     });
 
-    // Color the profit cell
+    // Color the profit & rate cells
     const profitTd = tr.children[8]; // 0=check,1=id,2=player,3=series,4=buyer,5=source,6=cost,7=sold,8=profit
-    if (profit >= 0) profitTd.className = 'profit-cell-pos';
-    else profitTd.className = 'profit-cell-neg';
+    const rateTd = tr.children[9];   // 9=profit_rate
+    if (profit >= 0) { profitTd.className = 'profit-cell-pos'; rateTd.className = 'profit-cell-pos'; }
+    else { profitTd.className = 'profit-cell-neg'; rateTd.className = 'profit-cell-neg'; }
 
     tbody.appendChild(tr);
   });
